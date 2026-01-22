@@ -1,7 +1,8 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  /* config options here */
-};
+  // Required for better-sqlite3 to work in Next.js
+  serverExternalPackages: ['better-sqlite3'],
+}
 
-export default nextConfig;
+export default nextConfig
