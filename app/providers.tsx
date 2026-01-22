@@ -7,56 +7,59 @@ import {
   useEffect,
   type ReactNode,
 } from 'react'
+import type { Project } from '@/lib/types'
 
 interface AppConfig {
-  isConfigured: boolean
+  projects: Project[]
+  currentProject: Project | null
   isLoading: boolean
-  projectName?: string
-  figmaFileKey?: string
-  lastSync?: string
-  refetch: () => Promise<void>
+  setCurrentProject: (id: string) => void
+  refetchProjects: () => Promise<void>
 }
 
 const AppConfigContext = createContext<AppConfig | null>(null)
 
 export function AppConfigProvider({ children }: { children: ReactNode }) {
-  const [isConfigured, setIsConfigured] = useState(false)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [settings, setSettings] = useState<Record<string, string>>({})
 
-  const fetchConfig = async () => {
+  const fetchProjects = async () => {
     setIsLoading(true)
     try {
-      const [checkRes, settingsRes] = await Promise.all([
-        fetch('/api/settings/check'),
-        fetch('/api/settings'),
-      ])
+      const res = await fetch('/api/projects')
+      const data = await res.json()
 
-      const checkData = await checkRes.json()
-      const settingsData = await settingsRes.json()
+      if (data.success) {
+        const projectList = data.data as Project[]
+        setProjects(projectList)
 
-      setIsConfigured(checkData.data?.isConfigured ?? false)
-      setSettings(settingsData.data ?? {})
+        // Set first project as current if none selected
+        if (!currentProjectId && projectList.length > 0) {
+          setCurrentProjectId(projectList[0].id)
+        }
+      }
     } catch (error) {
-      console.error('Failed to fetch config:', error)
+      console.error('Failed to fetch projects:', error)
     } finally {
       setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchConfig()
+    fetchProjects()
   }, [])
+
+  const currentProject = projects.find((p) => p.id === currentProjectId) ?? null
 
   return (
     <AppConfigContext.Provider
       value={{
-        isConfigured,
+        projects,
+        currentProject,
         isLoading,
-        projectName: settings.project_name,
-        figmaFileKey: settings.figma_file_key,
-        lastSync: settings.last_sync,
-        refetch: fetchConfig,
+        setCurrentProject: setCurrentProjectId,
+        refetchProjects: fetchProjects,
       }}
     >
       {children}

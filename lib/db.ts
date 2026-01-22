@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'
+import { needsMigration, migrateToMultiProject } from './db/migration'
 
 // Ensure data directory exists
 const dataDir = path.join(process.cwd(), 'data')
@@ -14,7 +15,7 @@ const db = new Database(dbPath)
 // Enable WAL mode for better concurrent access
 db.pragma('journal_mode = WAL')
 
-// Initialize schema
+// Initialize base schema (v1)
 db.exec(`
   CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
@@ -42,5 +43,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_text_blocks_last_modified ON text_blocks(last_modified);
   CREATE INDEX IF NOT EXISTS idx_text_blocks_content_hash ON text_blocks(content_hash);
 `)
+
+// Run migration if needed (v1 → v2)
+if (needsMigration()) {
+  migrateToMultiProject()
+}
 
 export { db }

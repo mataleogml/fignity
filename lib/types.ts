@@ -1,4 +1,4 @@
-// Settings types
+// Settings types (now only app-level settings)
 export interface Setting {
   key: string
   value: string
@@ -7,19 +7,45 @@ export interface Setting {
 }
 
 export type SettingsMap = {
-  figma_token?: string
-  figma_file_key?: string
-  project_name?: string
-  last_sync?: string
+  schema_version?: string
+  [key: string]: string | undefined
+}
+
+// Project types
+export interface Project {
+  id: string
+  name: string
+  figma_file_key: string
+  figma_token: string
+  included_components: string // JSON array of component IDs to include
+  source_page_ids: string // JSON array of Figma page IDs to sync
+  last_sync: number | null
+  archived: boolean
+  created_at: number
+  updated_at: number
+}
+
+// Figma page info (organizational pages from sidebar)
+export interface FigmaPageInfo {
+  id: string
+  name: string
 }
 
 // Text block types
 export interface TextBlock {
   id: string
+  project_id: string
   page_id: string
   page_name: string
+  frame_id: string | null
+  frame_name: string | null
+  frame_x: number | null
+  frame_y: number | null
+  frame_width: number | null
+  frame_height: number | null
   content: string
   style: string
+  font_size: number
   x: number
   y: number
   width: number
@@ -27,6 +53,14 @@ export interface TextBlock {
   content_hash: string
   last_modified: number
   created_at: number
+}
+
+// Component metadata (for inclusion/exclusion UI)
+export interface ComponentInfo {
+  id: string
+  name: string
+  type: string // 'FRAME' | 'COMPONENT' | 'INSTANCE'
+  textBlockCount: number
 }
 
 // Figma API types (minimal subset needed)

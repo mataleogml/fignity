@@ -1,21 +1,26 @@
 import { NextResponse } from 'next/server'
-import { getSetting } from '@/lib/db/settings'
+import { getAllProjects } from '@/lib/db/projects'
 import { syncFromFigma } from '@/lib/figma/sync'
 import { FigmaApiError } from '@/lib/figma/client'
 
+/**
+ * POST /api/sync (DEPRECATED - use /api/projects/[id]/sync instead)
+ * Syncs the first non-archived project for backwards compatibility
+ */
 export async function POST() {
   try {
-    const token = getSetting('figma_token')
-    const fileKey = getSetting('figma_file_key')
+    const projects = getAllProjects()
 
-    if (!token || !fileKey) {
+    if (projects.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Figma credentials not configured' },
+        { success: false, error: 'No projects configured' },
         { status: 400 }
       )
     }
 
-    const result = await syncFromFigma(fileKey, token)
+    // Sync the first project for backwards compatibility
+    const firstProject = projects[0]
+    const result = await syncFromFigma(firstProject.id)
 
     return NextResponse.json({
       success: true,

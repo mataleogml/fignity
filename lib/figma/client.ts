@@ -40,6 +40,12 @@ export interface ExtractedTextNode {
   id: string
   pageId: string
   pageName: string
+  frameId: string | null
+  frameName: string | null
+  frameX: number | null
+  frameY: number | null
+  frameWidth: number | null
+  frameHeight: number | null
   content: string
   fontSize: number
   x: number
@@ -48,14 +54,41 @@ export interface ExtractedTextNode {
   height: number
 }
 
-export function extractTextNodes(file: FigmaFile): ExtractedTextNode[] {
+export function extractTextNodes(
+  file: FigmaFile,
+  sourcePageIds?: string[]
+): ExtractedTextNode[] {
   const textNodes: ExtractedTextNode[] = []
 
   function traverse(
     node: FigmaNode,
     pageId: string,
-    pageName: string
+    pageName: string,
+    parentFrame?: { id: string; name: string; x: number; y: number; width: number; height: number }
   ): void {
+    // Track current frame context - only set it once (top-level artboard)
+    let currentFrame = parentFrame
+
+    // Only set frame context if we don't already have one (this captures the top-level artboard)
+    if (
+      !currentFrame &&
+      (node.type === 'FRAME' ||
+        node.type === 'COMPONENT' ||
+        node.type === 'INSTANCE' ||
+        node.type === 'COMPONENT_SET')
+    ) {
+      const frameBounds = node.absoluteBoundingBox
+      currentFrame = {
+        id: node.id,
+        name: node.name,
+        x: frameBounds?.x ?? 0,
+        y: frameBounds?.y ?? 0,
+        width: frameBounds?.width ?? 0,
+        height: frameBounds?.height ?? 0,
+      }
+    }
+
+    // Extract text nodes
     if (node.type === 'TEXT' && node.characters) {
       const bounds = node.absoluteBoundingBox
       if (bounds) {
@@ -63,6 +96,12 @@ export function extractTextNodes(file: FigmaFile): ExtractedTextNode[] {
           id: node.id,
           pageId,
           pageName,
+          frameId: currentFrame?.id ?? null,
+          frameName: currentFrame?.name ?? null,
+          frameX: currentFrame?.x ?? null,
+          frameY: currentFrame?.y ?? null,
+          frameWidth: currentFrame?.width ?? null,
+          frameHeight: currentFrame?.height ?? null,
           content: node.characters,
           fontSize: node.style?.fontSize ?? 14,
           x: bounds.x,
@@ -73,16 +112,24 @@ export function extractTextNodes(file: FigmaFile): ExtractedTextNode[] {
       }
     }
 
+    // Recurse with updated frame context
     if (node.children) {
       for (const child of node.children) {
-        traverse(child, pageId, pageName)
+        traverse(child, pageId, pageName, currentFrame)
       }
     }
   }
 
   // The document's direct children are pages
   const pages = file.document.children ?? []
-  for (const page of pages) {
+
+  // Filter pages if sourcePageIds is provided
+  const pagesToProcess =
+    sourcePageIds && sourcePageIds.length > 0
+      ? pages.filter((page) => sourcePageIds.includes(page.id))
+      : pages
+
+  for (const page of pagesToProcess) {
     traverse(page, page.id, page.name)
   }
 

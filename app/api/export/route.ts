@@ -1,13 +1,20 @@
 import { NextResponse } from 'next/server'
-import { getAllTextBlocks, getTextBlocksSince } from '@/lib/db/text-blocks'
+import {
+  getAllTextBlocks,
+  getTextBlocksSince,
+  getTextBlocksByProject,
+} from '@/lib/db/text-blocks'
 import { exportQuerySchema } from '@/lib/validation'
 import type { TextBlock } from '@/lib/types'
 
 function toCSV(blocks: TextBlock[]): string {
   const headers = [
     'id',
+    'project_id',
     'page_id',
     'page_name',
+    'frame_id',
+    'frame_name',
     'content',
     'style',
     'x',
@@ -21,7 +28,7 @@ function toCSV(blocks: TextBlock[]): string {
     headers
       .map((h) => {
         const value = block[h as keyof TextBlock]
-        const str = String(value)
+        const str = value === null ? '' : String(value)
         // Escape quotes and wrap in quotes if contains comma or newline
         if (str.includes(',') || str.includes('"') || str.includes('\n')) {
           return `"${str.replace(/"/g, '""')}"`
@@ -42,9 +49,20 @@ export async function GET(request: Request) {
       since: searchParams.get('since'),
     })
 
-    const blocks = query.since
-      ? getTextBlocksSince(query.since)
-      : getAllTextBlocks()
+    const projectId = searchParams.get('projectId')
+
+    let blocks: TextBlock[]
+
+    if (projectId) {
+      // Filter by project
+      blocks = getTextBlocksByProject(projectId)
+      if (query.since) {
+        blocks = blocks.filter((b) => b.last_modified >= query.since!)
+      }
+    } else {
+      // All projects
+      blocks = query.since ? getTextBlocksSince(query.since) : getAllTextBlocks()
+    }
 
     if (query.format === 'csv') {
       const csv = toCSV(blocks)
