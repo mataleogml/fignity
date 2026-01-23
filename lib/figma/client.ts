@@ -48,6 +48,7 @@ export interface ExtractedTextNode {
   frameHeight: number | null
   content: string
   fontSize: number
+  styleName: string | null // Figma text style name (e.g., "Body/Medium", "Heading/Large")
   x: number
   y: number
   width: number
@@ -92,6 +93,16 @@ export function extractTextNodes(
 ): ExtractedTextNode[] {
   const textNodes: ExtractedTextNode[] = []
 
+  // Build style ID to name mapping
+  const styleIdToName = new Map<string, string>()
+  if (file.styles) {
+    for (const [styleId, styleMetadata] of Object.entries(file.styles)) {
+      if (styleMetadata.styleType === 'TEXT') {
+        styleIdToName.set(styleId, styleMetadata.name)
+      }
+    }
+  }
+
   function traverse(
     node: FigmaNode,
     pageId: string,
@@ -124,6 +135,10 @@ export function extractTextNodes(
     if (node.type === 'TEXT' && node.characters) {
       const bounds = node.absoluteBoundingBox
       if (bounds) {
+        // Look up the text style name from the style ID
+        const styleId = node.styles?.text
+        const styleName = styleId ? styleIdToName.get(styleId) ?? null : null
+
         textNodes.push({
           id: node.id,
           pageId,
@@ -136,6 +151,7 @@ export function extractTextNodes(
           frameHeight: currentFrame?.height ?? null,
           content: node.characters,
           fontSize: node.style?.fontSize ?? 14,
+          styleName,
           x: bounds.x,
           y: bounds.y,
           width: bounds.width,

@@ -137,6 +137,26 @@ export default function ProjectDetailPage() {
 
   const handleAcceptChange = async (blockId: string) => {
     try {
+      // Optimistically update the UI
+      setTextBlocks((prevBlocks) =>
+        prevBlocks.map((block) =>
+          block.id === blockId
+            ? {
+                ...block,
+                change_status: 'accepted' as const,
+                previous_content: null,
+                previous_style: null,
+                previous_x: null,
+                previous_y: null,
+                previous_width: null,
+                previous_height: null,
+                previous_content_hash: null,
+                change_accepted_at: Date.now(),
+              }
+            : block
+        )
+      )
+
       const res = await fetch(
         `/api/projects/${projectId}/text-blocks/${blockId}/accept`,
         { method: 'POST' }
@@ -147,9 +167,65 @@ export default function ProjectDetailPage() {
         throw new Error(data.error || 'Failed to accept change')
       }
 
-      await fetchData()
+      // Show success toast
+      const { toast } = await import('sonner')
+      toast.success('Change accepted')
     } catch (err) {
-      console.error('Failed to accept change:', err)
+      // Revert optimistic update on error
+      await fetchData()
+      const { toast } = await import('sonner')
+      toast.error('Failed to accept change')
+    }
+  }
+
+  const handleAcceptAllChanges = async () => {
+    try {
+      const now = Date.now()
+
+      // Count pending changes before updating
+      const pendingCount = textBlocks.filter(b => b.change_status === 'pending').length
+
+      // Optimistically update all pending blocks to accepted
+      setTextBlocks((prevBlocks) =>
+        prevBlocks.map((block) =>
+          block.change_status === 'pending'
+            ? {
+                ...block,
+                change_status: 'accepted' as const,
+                previous_content: null,
+                previous_style: null,
+                previous_x: null,
+                previous_y: null,
+                previous_width: null,
+                previous_height: null,
+                previous_content_hash: null,
+                change_accepted_at: now,
+              }
+            : block
+        )
+      )
+
+      const res = await fetch(
+        `/api/projects/${projectId}/text-blocks/accept-all`,
+        { method: 'POST' }
+      )
+      const data = await res.json()
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to accept all changes')
+      }
+
+      // Show success toast with count
+      const count = data.data?.acceptedCount || pendingCount
+      if (count > 0) {
+        const { toast } = await import('sonner')
+        toast.success(`Accepted ${count} ${count === 1 ? 'change' : 'changes'}`)
+      }
+    } catch (err) {
+      // Revert optimistic update on error
+      await fetchData()
+      const { toast } = await import('sonner')
+      toast.error('Failed to accept all changes')
     }
   }
 
@@ -198,6 +274,7 @@ export default function ProjectDetailPage() {
       frames={framesWithStatus}
       textBlocks={textBlocks}
       onAcceptChange={handleAcceptChange}
+      onAcceptAllChanges={handleAcceptAllChanges}
       onSync={handleSync}
       onExport={handleExport}
       onUpdateProjectName={handleUpdateProjectName}

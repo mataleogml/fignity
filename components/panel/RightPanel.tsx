@@ -5,6 +5,7 @@ import { Panel, PanelSection, PanelHeader, ResizeHandle } from '.'
 import { StatusDot } from '../StatusDot'
 import { ScrollArea } from '../ui/scroll-area'
 import { Button } from '../ui/button'
+import { SplitButton } from '../ui/split-button'
 import { Separator } from '../ui/separator'
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip'
 import type { TextBlock, FrameWithStatus, ProjectStatus, TextBlockChange } from '@/lib/types'
@@ -29,6 +30,7 @@ interface RightPanelProps {
   onExport: () => void
   onCopyValue: (value: string, label: string) => void
   onAcceptChange: (blockId: string) => void
+  onAcceptAllChanges: () => void
   onSkipChange: () => void
   onNextChange: () => void
   onPreviousChange: () => void
@@ -57,6 +59,7 @@ export function RightPanel({
   onExport,
   onCopyValue,
   onAcceptChange,
+  onAcceptAllChanges,
   onSkipChange,
   onNextChange,
   onPreviousChange,
@@ -157,6 +160,7 @@ export function RightPanel({
             shouldShowChanges={shouldShowChanges}
             onCopyValue={onCopyValue}
             onAcceptCurrentChange={onAcceptCurrentChange}
+            onAcceptAllChanges={onAcceptAllChanges}
             onSkipChange={onSkipChange}
             onNextChange={onNextChange}
             onPreviousChange={onPreviousChange}
@@ -170,6 +174,7 @@ export function RightPanel({
             currentChange={currentChange}
             currentChangeDetails={currentChangeDetails}
             onAcceptChange={onAcceptChange}
+            onAcceptAllChanges={onAcceptAllChanges}
             onSkipChange={onSkipChange}
             onNextChange={onNextChange}
             onPreviousChange={onPreviousChange}
@@ -186,6 +191,7 @@ export function RightPanel({
             currentChange={currentChange}
             currentChangeDetails={currentChangeDetails}
             onAcceptChange={onAcceptChange}
+            onAcceptAllChanges={onAcceptAllChanges}
             onSkipChange={onSkipChange}
             onNextChange={onNextChange}
             onPreviousChange={onPreviousChange}
@@ -208,6 +214,7 @@ function TextBlockProperties({
   shouldShowChanges,
   onCopyValue,
   onAcceptCurrentChange,
+  onAcceptAllChanges,
   onSkipChange,
   onNextChange,
   onPreviousChange,
@@ -220,6 +227,7 @@ function TextBlockProperties({
   shouldShowChanges: boolean
   onCopyValue: (value: string, label: string) => void
   onAcceptCurrentChange: () => void
+  onAcceptAllChanges: () => void
   onSkipChange: () => void
   onNextChange: () => void
   onPreviousChange: () => void
@@ -370,12 +378,13 @@ function TextBlockProperties({
               >
                 Later
               </Button>
-              <Button
-                onClick={onAcceptCurrentChange}
+              <SplitButton
+                onPrimaryAction={onAcceptCurrentChange}
+                onSecondaryAction={onAcceptAllChanges}
+                primaryLabel="Accept"
+                secondaryLabel="Accept All"
                 className="flex-1"
-              >
-                Accept
-              </Button>
+              />
             </div>
           </PanelSection>
         </>
@@ -402,6 +411,7 @@ function ArtboardChanges({
   currentChange,
   currentChangeDetails,
   onAcceptChange,
+  onAcceptAllChanges,
   onSkipChange,
   onNextChange,
   onPreviousChange,
@@ -415,6 +425,7 @@ function ArtboardChanges({
   currentChange: TextBlock | null
   currentChangeDetails: TextBlockChange[]
   onAcceptChange: (blockId: string) => void
+  onAcceptAllChanges: () => void
   onSkipChange: () => void
   onNextChange: () => void
   onPreviousChange: () => void
@@ -509,12 +520,13 @@ function ArtboardChanges({
               >
                 Later
               </Button>
-              <Button
-                onClick={onAcceptCurrentChange}
+              <SplitButton
+                onPrimaryAction={onAcceptCurrentChange}
+                onSecondaryAction={onAcceptAllChanges}
+                primaryLabel="Accept"
+                secondaryLabel="Accept All"
                 className="flex-1"
-              >
-                Accept
-              </Button>
+              />
             </div>
           </PanelSection>
         </>
@@ -540,6 +552,7 @@ function DocumentChanges({
   currentChange,
   currentChangeDetails,
   onAcceptChange,
+  onAcceptAllChanges,
   onSkipChange,
   onNextChange,
   onPreviousChange,
@@ -554,6 +567,7 @@ function DocumentChanges({
   currentChange: TextBlock | null
   currentChangeDetails: TextBlockChange[]
   onAcceptChange: (blockId: string) => void
+  onAcceptAllChanges: () => void
   onSkipChange: () => void
   onNextChange: () => void
   onPreviousChange: () => void
@@ -651,12 +665,13 @@ function DocumentChanges({
               >
                 Later
               </Button>
-              <Button
-                onClick={onAcceptCurrentChange}
+              <SplitButton
+                onPrimaryAction={onAcceptCurrentChange}
+                onSecondaryAction={onAcceptAllChanges}
+                primaryLabel="Accept"
+                secondaryLabel="Accept All"
                 className="flex-1"
-              >
-                Accept
-              </Button>
+              />
             </div>
           </PanelSection>
         </>

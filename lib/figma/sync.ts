@@ -53,7 +53,8 @@ export async function syncFromFigma(projectId: string): Promise<SyncResult> {
   const timestamp = Date.now()
 
   for (const node of textNodes) {
-    const style = mapFontSizeToStyle(node.fontSize)
+    // Use actual Figma style name if available, fallback to font-size heuristic
+    const style = node.styleName ?? mapFontSizeToStyle(node.fontSize)
     const contentHash = generateContentHash(
       node.content,
       style,

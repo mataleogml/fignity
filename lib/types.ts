@@ -116,6 +116,9 @@ export interface FigmaNode {
   children?: FigmaNode[]
   characters?: string
   style?: FigmaTextStyle
+  styles?: {
+    text?: string // Text style ID reference
+  }
   absoluteBoundingBox?: {
     x: number
     y: number
@@ -130,9 +133,17 @@ export interface FigmaTextStyle {
   fontFamily?: string
 }
 
+export interface FigmaStyleMetadata {
+  key: string
+  name: string
+  styleType: string
+  description?: string
+}
+
 export interface FigmaFile {
   name: string
   document: FigmaNode
+  styles?: Record<string, FigmaStyleMetadata>
 }
 
 // API response types
