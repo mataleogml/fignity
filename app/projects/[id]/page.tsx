@@ -1,22 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import type { Project, TextBlock, SyncResult, Frame } from '@/lib/types'
+import { useParams } from 'next/navigation'
+import { Layout } from '@/components/Layout'
+import { computeFrameStatus, computeProjectStatus } from '@/lib/status'
+import type { Project, TextBlock, Frame, FrameWithStatus } from '@/lib/types'
 
 export default function ProjectDetailPage() {
   const params = useParams()
-  const router = useRouter()
   const projectId = params.id as string
 
   const [project, setProject] = useState<Project | null>(null)
@@ -24,60 +15,52 @@ export default function ProjectDetailPage() {
   const [frames, setFrames] = useState<Frame[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSyncing, setIsSyncing] = useState(false)
-  const [syncResult, setSyncResult] = useState<SyncResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 })
+  const [loadingFrameIds, setLoadingFrameIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    fetchProject()
-    fetchTextBlocks()
-    fetchFrames()
+    fetchData()
   }, [projectId])
 
-  const fetchProject = async () => {
-    try {
-      const res = await fetch(`/api/projects/${projectId}`)
-      const data = await res.json()
-      if (data.success) {
-        setProject(data.data)
-      }
-    } catch (err) {
-      console.error('Failed to fetch project:', err)
-    }
-  }
-
-  const fetchTextBlocks = async () => {
+  const fetchData = async () => {
     setIsLoading(true)
     try {
-      const res = await fetch(`/api/projects/${projectId}/text-blocks`)
-      const data = await res.json()
-      if (data.success) {
-        setTextBlocks(data.data)
-      }
+      const [projectRes, blocksRes, framesRes] = await Promise.all([
+        fetch(`/api/projects/${projectId}`),
+        fetch(`/api/projects/${projectId}/text-blocks`),
+        fetch(`/api/projects/${projectId}/frames`),
+      ])
+
+      const [projectData, blocksData, framesData] = await Promise.all([
+        projectRes.json(),
+        blocksRes.json(),
+        framesRes.json(),
+      ])
+
+      if (projectData.success) setProject(projectData.data)
+      if (blocksData.success) setTextBlocks(blocksData.data)
+      if (framesData.success) setFrames(framesData.data)
     } catch (err) {
-      console.error('Failed to fetch text blocks:', err)
+      console.error('Failed to fetch data:', err)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const fetchFrames = async () => {
-    try {
-      const res = await fetch(`/api/projects/${projectId}/frames`)
-      const data = await res.json()
-      if (data.success) {
-        setFrames(data.data)
-      }
-    } catch (err) {
-      console.error('Failed to fetch frames:', err)
-    }
-  }
-
-  const handleSync = async () => {
-    setIsSyncing(true)
-    setError(null)
-    setSyncResult(null)
+  const handleSync = async (specificFrameId?: string) => {
+    if (isSyncing) return
 
     try {
+      setIsSyncing(true)
+
+      // Show loading on specific frame or all frames
+      const framesToSync = specificFrameId
+        ? new Set([specificFrameId])
+        : new Set(frames.map(f => f.id))
+      setLoadingFrameIds(framesToSync)
+      setSyncProgress({ current: 0, total: framesToSync.size })
+
+      // Call sync API
       const res = await fetch(`/api/projects/${projectId}/sync`, {
         method: 'POST',
       })
@@ -87,282 +70,140 @@ export default function ProjectDetailPage() {
         throw new Error(data.error || 'Sync failed')
       }
 
-      setSyncResult(data.data)
-      await fetchTextBlocks()
-      await fetchFrames()
-      await fetchProject()
+      // Fetch updated data
+      const [blocksRes, framesRes] = await Promise.all([
+        fetch(`/api/projects/${projectId}/text-blocks`),
+        fetch(`/api/projects/${projectId}/frames`),
+      ])
+
+      const [blocksData, framesData] = await Promise.all([
+        blocksRes.json(),
+        framesRes.json(),
+      ])
+
+      if (blocksData.success) setTextBlocks(blocksData.data)
+
+      // Determine which frames changed
+      const changedFrameIds = new Set<string>()
+      if (blocksData.success) {
+        const changedBlocks = blocksData.data.filter(
+          (b: TextBlock) => b.change_status === 'pending' || b.change_status === 'accepted'
+        )
+        changedBlocks.forEach((b: TextBlock) => {
+          if (b.frame_id) changedFrameIds.add(b.frame_id)
+        })
+      }
+
+      // Remove loaders from unchanged frames progressively
+      const unchangedFrameIds = Array.from(framesToSync).filter(id => !changedFrameIds.has(id))
+      for (let i = 0; i < unchangedFrameIds.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 50)) // Small delay for visual effect
+        setLoadingFrameIds(prev => {
+          const next = new Set(prev)
+          next.delete(unchangedFrameIds[i])
+          return next
+        })
+        setSyncProgress({ current: i + 1, total: framesToSync.size })
+      }
+
+      // Update frames data (this includes new images for changed frames)
+      if (framesData.success) setFrames(framesData.data)
+
+      // Remove loaders from changed frames
+      for (const frameId of changedFrameIds) {
+        await new Promise(resolve => setTimeout(resolve, 50))
+        setLoadingFrameIds(prev => {
+          const next = new Set(prev)
+          next.delete(frameId)
+          return next
+        })
+        setSyncProgress(prev => ({ ...prev, current: prev.current + 1 }))
+      }
+
+      // Fetch updated project data
+      const projectRes = await fetch(`/api/projects/${projectId}`)
+      const projectData = await projectRes.json()
+      if (projectData.success) setProject(projectData.data)
+
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sync failed')
+      console.error('Sync failed:', err)
+      // Clear loading states on error
+      setLoadingFrameIds(new Set())
     } finally {
       setIsSyncing(false)
+      setSyncProgress({ current: 0, total: 0 })
     }
   }
 
-  const handleExport = async (format: 'json' | 'csv') => {
-    window.open(`/api/export?format=${format}&projectId=${projectId}`, '_blank')
-  }
+  const handleAcceptChange = async (blockId: string) => {
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/text-blocks/${blockId}/accept`,
+        { method: 'POST' }
+      )
+      const data = await res.json()
 
-  // Group text blocks by frame ID (to handle duplicate frame names)
-  const blocksByFrameId = textBlocks.reduce(
-    (acc, block) => {
-      const frameId = block.frame_id || 'ungrouped'
-      if (!acc[frameId]) {
-        acc[frameId] = []
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to accept change')
       }
-      acc[frameId].push(block)
-      return acc
-    },
-    {} as Record<string, TextBlock[]>
-  )
 
-  // Create frame entries with metadata
-  const frameEntries = Object.entries(blocksByFrameId).map(([frameId, blocks]) => {
-    const firstBlock = blocks[0]
-    const frameName = firstBlock?.frame_name || 'Ungrouped'
-    const frameY = firstBlock?.frame_y ?? 0
-    const frameX = firstBlock?.frame_x ?? 0
-
-    return {
-      frameId,
-      frameName,
-      blocks,
-      frameY,
-      frameX,
+      await fetchData()
+    } catch (err) {
+      console.error('Failed to accept change:', err)
     }
-  })
+  }
 
-  // Sort frames by position: top to bottom, then left to right
-  const sortedFrames = frameEntries.sort((a, b) => {
-    // Group by rows (tolerance of 100px for "same row")
-    const yDiff = a.frameY - b.frameY
-    if (Math.abs(yDiff) > 100) {
-      return yDiff // Different rows: sort by Y
+  const handleExport = () => {
+    window.open(`/api/export?format=json&projectId=${projectId}`, '_blank')
+  }
+
+  const handleUpdateProjectName = async (newName: string) => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName }),
+      })
+      const data = await res.json()
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to update project name')
+      }
+
+      await fetchData()
+    } catch (err) {
+      console.error('Failed to update project name:', err)
     }
-    return a.frameX - b.frameX // Same row: sort by X (left to right)
-  })
+  }
 
-  if (isLoading && !project) {
+  if (isLoading || !project) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-[#1e1e1e] text-white">
         <p className="text-gray-500">Loading...</p>
       </div>
     )
   }
 
-  if (!project) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-500 mb-4">Project not found</p>
-          <Button onClick={() => router.push('/')}>Back to Projects</Button>
-        </div>
-      </div>
-    )
-  }
+  const framesWithStatus: FrameWithStatus[] = frames.map((frame) =>
+    computeFrameStatus(frame, textBlocks)
+  )
+
+  const projectStatus = computeProjectStatus(textBlocks, project.last_export)
 
   return (
-    <div className="min-h-screen p-4 md:p-8 bg-gray-50">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push('/')}
-              className="mb-2"
-            >
-              ← Back to Projects
-            </Button>
-            <h1 className="text-2xl font-bold">{project.name}</h1>
-            {project.last_sync && (
-              <p className="text-sm text-gray-500">
-                Last synced: {new Date(project.last_sync).toLocaleString()}
-              </p>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => router.push(`/projects/${projectId}/settings`)}
-            >
-              Settings
-            </Button>
-            <Button variant="outline" onClick={() => handleExport('json')}>
-              Export JSON
-            </Button>
-            <Button variant="outline" onClick={() => handleExport('csv')}>
-              Export CSV
-            </Button>
-            <Button onClick={handleSync} disabled={isSyncing}>
-              {isSyncing ? 'Syncing...' : 'Sync from Figma'}
-            </Button>
-          </div>
-        </div>
-
-        {/* Sync Result */}
-        {syncResult && (
-          <Card>
-            <CardContent className="pt-4">
-              <div className="flex gap-4 text-sm">
-                <span>Total: {syncResult.total}</span>
-                <span className="text-green-600">New: {syncResult.new}</span>
-                <span className="text-blue-600">
-                  Updated: {syncResult.updated}
-                </span>
-                <span className="text-gray-500">
-                  Unchanged: {syncResult.unchanged}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Error */}
-        {error && (
-          <Card className="border-red-200 bg-red-50">
-            <CardContent className="pt-4 text-red-600">{error}</CardContent>
-          </Card>
-        )}
-
-        {/* Tabs for switching between text-only and visual modes */}
-        <Tabs defaultValue="text" className="w-full">
-          <TabsList>
-            <TabsTrigger value="text">Text Only</TabsTrigger>
-            <TabsTrigger value="visual">Visual</TabsTrigger>
-          </TabsList>
-
-          {/* Text Only Mode - Collapsible grouped by frame (publication page) */}
-          <TabsContent value="text" className="space-y-4 mt-6">
-            {sortedFrames.map((frame, index) => (
-            <details key={frame.frameId} className="group" open>
-              <summary className="cursor-pointer list-none">
-                <Card className="hover:shadow-md transition-shadow">
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="text-lg">
-                        {frame.frameName} {index + 1}
-                      </CardTitle>
-                      <CardDescription>
-                        {frame.blocks.length} text blocks
-                      </CardDescription>
-                    </div>
-                    <div className="text-gray-400 group-open:rotate-90 transition-transform">
-                      ▶
-                    </div>
-                  </CardHeader>
-                </Card>
-              </summary>
-              <Card className="mt-2">
-                <CardContent className="pt-6">
-                  <div className="space-y-4">
-                    {frame.blocks.map((block) => (
-                      <div
-                        key={block.id}
-                        className="border rounded-lg p-4 space-y-2 hover:border-blue-300 transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary">{block.style}</Badge>
-                          <span className="text-xs text-gray-400 ml-auto">
-                            ({block.x.toFixed(0)}, {block.y.toFixed(0)})
-                          </span>
-                        </div>
-                        <p className="text-sm">{block.content}</p>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </details>
-          ))}
-          </TabsContent>
-
-          {/* Visual Mode - Frame images with text box overlays (no text content) */}
-          <TabsContent value="visual" className="space-y-6 mt-6">
-            {sortedFrames.map((frame, index) => {
-            // Find corresponding frame data with image
-            const frameData = frames.find(f => f.id === frame.frameId)
-
-            // Use frame dimensions from first block (all blocks in same frame have same dimensions)
-            const firstBlock = frame.blocks[0]
-            const pageWidth = frameData?.width ?? firstBlock?.frame_width ?? 612
-            const pageHeight = frameData?.height ?? firstBlock?.frame_height ?? 792
-            const frameX = frameData?.x ?? firstBlock?.frame_x ?? 0
-            const frameY = frameData?.y ?? firstBlock?.frame_y ?? 0
-
-            // Scale to fit display (target 800px wide for better visibility)
-            const targetWidth = 800
-            const scale = targetWidth / pageWidth
-
-            return (
-              <Card key={frame.frameId}>
-                <CardHeader>
-                  <CardTitle>
-                    {frame.frameName} {index + 1}
-                  </CardTitle>
-                  <CardDescription>
-                    {frame.blocks.length} text blocks · {pageWidth.toFixed(0)}×
-                    {pageHeight.toFixed(0)}px
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex justify-center">
-                    <div
-                      className="relative rounded-lg shadow-md overflow-hidden"
-                      style={{
-                        width: pageWidth * scale,
-                        height: pageHeight * scale,
-                      }}
-                    >
-                      {/* Background frame image if available */}
-                      {frameData?.image_url ? (
-                        <img
-                          src={frameData.image_url}
-                          alt={frame.frameName}
-                          className="absolute inset-0 w-full h-full object-contain"
-                        />
-                      ) : (
-                        <div className="absolute inset-0 bg-white border" />
-                      )}
-
-                      {/* Text box overlays - showing boxes without text content */}
-                      {frame.blocks.map((block) => {
-                        return (
-                          <div
-                            key={block.id}
-                            className="absolute border-2 border-blue-400/70 bg-blue-100/20 hover:z-10 hover:border-blue-600 hover:bg-blue-200/40 transition-all cursor-pointer group"
-                            style={{
-                              left: (block.x - frameX) * scale,
-                              top: (block.y - frameY) * scale,
-                              width: block.width * scale,
-                              height: block.height * scale,
-                            }}
-                            title={`${block.style}: ${block.content.substring(0, 50)}...`}
-                          >
-                            <Badge
-                              variant="secondary"
-                              className="absolute top-0 left-0 text-[9px] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 bg-blue-600 text-white"
-                            >
-                              {block.style}
-                            </Badge>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-4 text-center">
-                    {frameData?.image_url
-                      ? 'Frame image with text block overlays - hover to see style'
-                      : 'No frame image available - showing text boxes only'
-                    }
-                  </p>
-                </CardContent>
-              </Card>
-            )
-          })}
-          </TabsContent>
-        </Tabs>
-      </div>
-    </div>
+    <Layout
+      projectId={projectId}
+      projectName={project.name}
+      projectStatus={projectStatus}
+      frames={framesWithStatus}
+      textBlocks={textBlocks}
+      onAcceptChange={handleAcceptChange}
+      onSync={handleSync}
+      onExport={handleExport}
+      onUpdateProjectName={handleUpdateProjectName}
+      isSyncing={isSyncing}
+      syncProgress={syncProgress}
+      loadingFrameIds={loadingFrameIds}
+    />
   )
 }

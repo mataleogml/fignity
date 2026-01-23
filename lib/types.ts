@@ -11,6 +11,9 @@ export type SettingsMap = {
   [key: string]: string | undefined
 }
 
+// Project status: clean (all accepted), pending (has unaccepted changes), needs_export (accepted changes not exported)
+export type ProjectStatus = 'clean' | 'pending' | 'needs_export'
+
 // Project types
 export interface Project {
   id: string
@@ -20,6 +23,7 @@ export interface Project {
   included_components: string // JSON array of component IDs to include
   source_page_ids: string // JSON array of Figma page IDs to sync
   last_sync: number | null
+  last_export: number | null
   archived: boolean
   created_at: number
   updated_at: number
@@ -30,6 +34,9 @@ export interface FigmaPageInfo {
   id: string
   name: string
 }
+
+// Change status for text blocks and frames
+export type ChangeStatus = 'clean' | 'pending' | 'accepted'
 
 // Text block types
 export interface TextBlock {
@@ -53,6 +60,24 @@ export interface TextBlock {
   content_hash: string
   last_modified: number
   created_at: number
+  change_status: ChangeStatus
+  previous_content: string | null
+  previous_style: string | null
+  previous_x: number | null
+  previous_y: number | null
+  previous_width: number | null
+  previous_height: number | null
+  previous_content_hash: string | null
+  change_detected_at: number | null
+  change_accepted_at: number | null
+}
+
+// Change information for displaying diffs
+export interface TextBlockChange {
+  type: 'content' | 'style' | 'position' | 'size'
+  label: string
+  oldValue: string
+  newValue: string
 }
 
 // Frame metadata (for visual mode)
@@ -67,6 +92,12 @@ export interface Frame {
   height: number
   last_synced: number
   created_at: number
+}
+
+// Frame status computed from its text blocks
+export interface FrameWithStatus extends Frame {
+  status: ChangeStatus
+  pendingChangesCount: number
 }
 
 // Component metadata (for inclusion/exclusion UI)

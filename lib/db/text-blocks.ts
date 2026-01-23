@@ -43,56 +43,166 @@ export function getTextBlocksSince(
   return stmt.all(timestamp) as TextBlock[]
 }
 
-export function upsertTextBlock(block: Omit<TextBlock, 'created_at'>): void {
-  const stmt = db.prepare(`
-    INSERT INTO text_blocks (
-      id, project_id, page_id, page_name, frame_id, frame_name, frame_x, frame_y, frame_width, frame_height,
-      content, style, font_size, x, y, width, height, content_hash, last_modified, created_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-      project_id = excluded.project_id,
-      page_id = excluded.page_id,
-      page_name = excluded.page_name,
-      frame_id = excluded.frame_id,
-      frame_name = excluded.frame_name,
-      frame_x = excluded.frame_x,
-      frame_y = excluded.frame_y,
-      frame_width = excluded.frame_width,
-      frame_height = excluded.frame_height,
-      content = excluded.content,
-      style = excluded.style,
-      font_size = excluded.font_size,
-      x = excluded.x,
-      y = excluded.y,
-      width = excluded.width,
-      height = excluded.height,
-      content_hash = excluded.content_hash,
-      last_modified = excluded.last_modified
-  `)
+export function upsertTextBlock(
+  block: Omit<TextBlock, 'created_at' | 'change_status' | 'previous_content' | 'previous_style' | 'previous_x' | 'previous_y' | 'previous_width' | 'previous_height' | 'previous_content_hash' | 'change_detected_at' | 'change_accepted_at'>,
+  options?: {
+    isNew?: boolean
+    isChanged?: boolean
+    previousValues?: {
+      content: string
+      style: string
+      x: number
+      y: number
+      width: number
+      height: number
+      content_hash: string
+    }
+  }
+): void {
+  const now = Date.now()
+  const isNew = options?.isNew ?? false
+  const isChanged = options?.isChanged ?? false
 
-  stmt.run(
-    block.id,
-    block.project_id,
-    block.page_id,
-    block.page_name,
-    block.frame_id,
-    block.frame_name,
-    block.frame_x,
-    block.frame_y,
-    block.frame_width,
-    block.frame_height,
-    block.content,
-    block.style,
-    block.font_size,
-    block.x,
-    block.y,
-    block.width,
-    block.height,
-    block.content_hash,
-    block.last_modified,
-    Date.now()
-  )
+  if (isNew) {
+    // New text block - insert with 'clean' status
+    const stmt = db.prepare(`
+      INSERT INTO text_blocks (
+        id, project_id, page_id, page_name, frame_id, frame_name, frame_x, frame_y, frame_width, frame_height,
+        content, style, font_size, x, y, width, height, content_hash, last_modified,
+        change_status, previous_content, previous_style, previous_x, previous_y,
+        previous_width, previous_height, previous_content_hash, change_detected_at, change_accepted_at,
+        created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    stmt.run(
+      block.id,
+      block.project_id,
+      block.page_id,
+      block.page_name,
+      block.frame_id,
+      block.frame_name,
+      block.frame_x,
+      block.frame_y,
+      block.frame_width,
+      block.frame_height,
+      block.content,
+      block.style,
+      block.font_size,
+      block.x,
+      block.y,
+      block.width,
+      block.height,
+      block.content_hash,
+      block.last_modified,
+      'clean',
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      now
+    )
+  } else if (isChanged && options?.previousValues) {
+    // Changed text block - update and mark as pending
+    const prev = options.previousValues
+    const stmt = db.prepare(`
+      UPDATE text_blocks SET
+        project_id = ?,
+        page_id = ?,
+        page_name = ?,
+        frame_id = ?,
+        frame_name = ?,
+        frame_x = ?,
+        frame_y = ?,
+        frame_width = ?,
+        frame_height = ?,
+        content = ?,
+        style = ?,
+        font_size = ?,
+        x = ?,
+        y = ?,
+        width = ?,
+        height = ?,
+        content_hash = ?,
+        last_modified = ?,
+        change_status = 'pending',
+        previous_content = ?,
+        previous_style = ?,
+        previous_x = ?,
+        previous_y = ?,
+        previous_width = ?,
+        previous_height = ?,
+        previous_content_hash = ?,
+        change_detected_at = ?
+      WHERE id = ?
+    `)
+
+    stmt.run(
+      block.project_id,
+      block.page_id,
+      block.page_name,
+      block.frame_id,
+      block.frame_name,
+      block.frame_x,
+      block.frame_y,
+      block.frame_width,
+      block.frame_height,
+      block.content,
+      block.style,
+      block.font_size,
+      block.x,
+      block.y,
+      block.width,
+      block.height,
+      block.content_hash,
+      block.last_modified,
+      prev.content,
+      prev.style,
+      prev.x,
+      prev.y,
+      prev.width,
+      prev.height,
+      prev.content_hash,
+      now,
+      block.id
+    )
+  } else {
+    // Unchanged - update only the basic fields, preserve change status
+    const stmt = db.prepare(`
+      UPDATE text_blocks SET
+        project_id = ?,
+        page_id = ?,
+        page_name = ?,
+        frame_id = ?,
+        frame_name = ?,
+        frame_x = ?,
+        frame_y = ?,
+        frame_width = ?,
+        frame_height = ?,
+        last_modified = ?
+      WHERE id = ?
+    `)
+
+    stmt.run(
+      block.project_id,
+      block.page_id,
+      block.page_name,
+      block.frame_id,
+      block.frame_name,
+      block.frame_x,
+      block.frame_y,
+      block.frame_width,
+      block.frame_height,
+      block.last_modified,
+      block.id
+    )
+  }
 }
 
 export function getTextBlockCount(projectId?: string): number {

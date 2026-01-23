@@ -63,56 +63,50 @@ export async function syncFromFigma(projectId: string): Promise<SyncResult> {
 
     const existing = getTextBlock(node.id)
 
+    const blockData = {
+      id: node.id,
+      project_id: projectId,
+      page_id: node.pageId,
+      page_name: node.pageName,
+      frame_id: node.frameId,
+      frame_name: node.frameName,
+      frame_x: node.frameX,
+      frame_y: node.frameY,
+      frame_width: node.frameWidth,
+      frame_height: node.frameHeight,
+      content: node.content,
+      style,
+      font_size: node.fontSize,
+      x: node.x,
+      y: node.y,
+      width: node.width,
+      height: node.height,
+      content_hash: contentHash,
+      last_modified: timestamp,
+    }
+
     if (!existing) {
       // New block
-      upsertTextBlock({
-        id: node.id,
-        project_id: projectId,
-        page_id: node.pageId,
-        page_name: node.pageName,
-        frame_id: node.frameId,
-        frame_name: node.frameName,
-        frame_x: node.frameX,
-        frame_y: node.frameY,
-        frame_width: node.frameWidth,
-        frame_height: node.frameHeight,
-        content: node.content,
-        style,
-        font_size: node.fontSize,
-        x: node.x,
-        y: node.y,
-        width: node.width,
-        height: node.height,
-        content_hash: contentHash,
-        last_modified: timestamp,
-      })
+      upsertTextBlock(blockData, { isNew: true })
       newCount++
     } else if (existing.content_hash !== contentHash) {
-      // Changed block
-      upsertTextBlock({
-        id: node.id,
-        project_id: projectId,
-        page_id: node.pageId,
-        page_name: node.pageName,
-        frame_id: node.frameId,
-        frame_name: node.frameName,
-        frame_x: node.frameX,
-        frame_y: node.frameY,
-        frame_width: node.frameWidth,
-        frame_height: node.frameHeight,
-        content: node.content,
-        style,
-        font_size: node.fontSize,
-        x: node.x,
-        y: node.y,
-        width: node.width,
-        height: node.height,
-        content_hash: contentHash,
-        last_modified: timestamp,
+      // Changed block - store previous values and mark as pending
+      upsertTextBlock(blockData, {
+        isChanged: true,
+        previousValues: {
+          content: existing.content,
+          style: existing.style,
+          x: existing.x,
+          y: existing.y,
+          width: existing.width,
+          height: existing.height,
+          content_hash: existing.content_hash,
+        },
       })
       updatedCount++
     } else {
-      // Unchanged
+      // Unchanged - just update metadata
+      upsertTextBlock(blockData, { isNew: false, isChanged: false })
       unchangedCount++
     }
   }

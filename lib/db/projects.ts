@@ -19,6 +19,7 @@ export function getProject(id: string): Project | null {
         included_components: string
         source_page_ids: string
         last_sync: number | null
+        last_export: number | null
         archived: number
         created_at: number
         updated_at: number
@@ -49,6 +50,7 @@ export function getAllProjects(): Project[] {
     included_components: string
     source_page_ids: string
     last_sync: number | null
+    last_export: number | null
     archived: number
     created_at: number
     updated_at: number
@@ -74,6 +76,7 @@ export function getAllProjectsIncludingArchived(): Project[] {
     included_components: string
     source_page_ids: string
     last_sync: number | null
+    last_export: number | null
     archived: number
     created_at: number
     updated_at: number
@@ -113,6 +116,7 @@ export function createProject(data: {
     included_components: includedComponents,
     source_page_ids: sourcePageIds,
     last_sync: null,
+    last_export: null,
     archived: false,
     created_at: now,
     updated_at: now,
@@ -131,6 +135,7 @@ export function updateProject(
     includedComponents: string[]
     sourcePageIds: string[]
     lastSync: number | null
+    lastExport: number | null
   }>
 ): Project | null {
   const existing = getProject(id)
@@ -167,6 +172,11 @@ export function updateProject(
   if (data.lastSync !== undefined) {
     updates.push('last_sync = ?')
     values.push(data.lastSync)
+  }
+
+  if (data.lastExport !== undefined) {
+    updates.push('last_export = ?')
+    values.push(data.lastExport)
   }
 
   if (updates.length === 0) {

@@ -69,4 +69,43 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_frames_last_synced ON frames(last_synced);
 `)
 
+// Add change tracking columns to text_blocks table
+try {
+  db.exec(`
+    ALTER TABLE text_blocks ADD COLUMN change_status TEXT DEFAULT 'clean';
+  `)
+} catch (e) {
+  // Column might already exist, ignore error
+}
+
+try {
+  db.exec(`
+    ALTER TABLE text_blocks ADD COLUMN previous_content TEXT;
+    ALTER TABLE text_blocks ADD COLUMN previous_style TEXT;
+    ALTER TABLE text_blocks ADD COLUMN previous_x REAL;
+    ALTER TABLE text_blocks ADD COLUMN previous_y REAL;
+    ALTER TABLE text_blocks ADD COLUMN previous_width REAL;
+    ALTER TABLE text_blocks ADD COLUMN previous_height REAL;
+    ALTER TABLE text_blocks ADD COLUMN previous_content_hash TEXT;
+    ALTER TABLE text_blocks ADD COLUMN change_detected_at INTEGER;
+    ALTER TABLE text_blocks ADD COLUMN change_accepted_at INTEGER;
+  `)
+} catch (e) {
+  // Columns might already exist, ignore error
+}
+
+// Create index for change status queries
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_text_blocks_change_status ON text_blocks(change_status);
+`)
+
+// Add last_export to projects table
+try {
+  db.exec(`
+    ALTER TABLE projects ADD COLUMN last_export INTEGER;
+  `)
+} catch (e) {
+  // Column might already exist, ignore error
+}
+
 export { db }
