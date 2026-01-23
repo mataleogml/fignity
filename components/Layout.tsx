@@ -9,18 +9,20 @@ import { toast } from 'sonner'
 import { LeftPanel, RightPanel } from './panel'
 
 interface LayoutProps {
-  projectId: string
-  projectName: string
-  projectStatus: ProjectStatus
-  frames: FrameWithStatus[]
-  textBlocks: TextBlock[]
-  onAcceptChange: (blockId: string) => Promise<void>
-  onSync: (frameId?: string) => Promise<void>
-  onExport: () => void
-  onUpdateProjectName: (newName: string) => Promise<void>
-  isSyncing: boolean
-  syncProgress: { current: number; total: number }
-  loadingFrameIds: Set<string>
+  projectId?: string
+  projectName?: string
+  projectStatus?: ProjectStatus
+  frames?: FrameWithStatus[]
+  textBlocks?: TextBlock[]
+  onAcceptChange?: (blockId: string) => Promise<void>
+  onAcceptAllChanges?: () => Promise<void>
+  onSync?: (frameId?: string) => Promise<void>
+  onExport?: () => void
+  onUpdateProjectName?: (newName: string) => Promise<void>
+  isSyncing?: boolean
+  syncProgress?: { current: number; total: number }
+  loadingFrameIds?: Set<string>
+  previewMode?: boolean
 }
 
 const MIN_LEFT_PANEL_WIDTH = 200
@@ -35,18 +37,20 @@ const MIN_THUMBNAIL_WIDTH = 120
 const MAX_THUMBNAIL_WIDTH = 180
 
 export function Layout({
-  projectId,
-  projectName,
-  projectStatus,
-  frames,
-  textBlocks,
-  onAcceptChange,
-  onSync,
-  onExport,
-  onUpdateProjectName,
-  isSyncing,
-  syncProgress,
-  loadingFrameIds,
+  projectId = '',
+  projectName = 'Untitled Project',
+  projectStatus = 'clean',
+  frames = [],
+  textBlocks = [],
+  onAcceptChange = async () => {},
+  onAcceptAllChanges = async () => {},
+  onSync = async () => {},
+  onExport = () => {},
+  onUpdateProjectName = async () => {},
+  isSyncing = false,
+  syncProgress = { current: 0, total: 0 },
+  loadingFrameIds = new Set<string>(),
+  previewMode = false,
 }: LayoutProps) {
   const [focusedFrameId, setFocusedFrameId] = useState<string | null>(
     frames[0]?.id || null
@@ -319,6 +323,13 @@ export function Layout({
       await handleAcceptChange(currentChange.id)
       setCurrentChangeIndex(0)
     }
+  }
+
+  const handleAcceptAllChangesWrapper = async () => {
+    await onAcceptAllChanges()
+    setSelectedBlockId(null)
+    setSelectedFrameId(null)
+    setCurrentChangeIndex(0)
   }
 
   // Global changes to review - always shows all pending changes across the document
@@ -683,6 +694,7 @@ export function Layout({
         onExport={onExport}
         onCopyValue={handleCopyValue}
         onAcceptChange={handleAcceptChange}
+        onAcceptAllChanges={handleAcceptAllChangesWrapper}
         onSkipChange={handleSkipChange}
         onNextChange={handleNextChange}
         onPreviousChange={handlePreviousChange}

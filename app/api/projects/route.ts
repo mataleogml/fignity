@@ -8,6 +8,7 @@ const CreateProjectSchema = z.object({
   figmaFileKey: z.string().min(1, 'Figma file key is required'),
   figmaToken: z.string().min(1, 'Figma token is required'),
   includedComponents: z.array(z.string()).optional(),
+  sourcePageIds: z.array(z.string()).optional(),
 })
 
 /**
@@ -77,6 +78,7 @@ export async function POST(
       figmaFileKey: fileKey,
       figmaToken: validated.figmaToken,
       includedComponents: validated.includedComponents,
+      sourcePageIds: validated.sourcePageIds,
     })
 
     // Hide token in response
