@@ -49,4 +49,24 @@ if (needsMigration()) {
   migrateToMultiProject()
 }
 
+// Create frames table for storing frame images (v3 schema addition)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS frames (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    image_url TEXT,
+    x REAL NOT NULL,
+    y REAL NOT NULL,
+    width REAL NOT NULL,
+    height REAL NOT NULL,
+    last_synced INTEGER NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_frames_project_id ON frames(project_id);
+  CREATE INDEX IF NOT EXISTS idx_frames_last_synced ON frames(last_synced);
+`)
+
 export { db }

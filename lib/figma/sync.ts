@@ -1,8 +1,9 @@
-import { fetchFigmaFile, extractTextNodes } from './client'
+import { fetchFigmaFile, extractTextNodes, fetchFrameImages } from './client'
 import { mapFontSizeToStyle } from './style-mapper'
 import { generateContentHash } from '@/lib/hash'
 import { getTextBlock, upsertTextBlock } from '@/lib/db/text-blocks'
 import { getProject, updateProject } from '@/lib/db/projects'
+import { upsertFrame } from '@/lib/db/frames'
 import type { SyncResult } from '@/lib/types'
 
 /**
@@ -114,6 +115,43 @@ export async function syncFromFigma(projectId: string): Promise<SyncResult> {
       // Unchanged
       unchangedCount++
     }
+  }
+
+  // Extract unique frames and fetch images for all of them
+  const uniqueFrames = new Map<string, { id: string; name: string; x: number; y: number; width: number; height: number }>()
+
+  for (const node of textNodes) {
+    if (node.frameId && !uniqueFrames.has(node.frameId)) {
+      uniqueFrames.set(node.frameId, {
+        id: node.frameId,
+        name: node.frameName ?? 'Unnamed Frame',
+        x: node.frameX ?? 0,
+        y: node.frameY ?? 0,
+        width: node.frameWidth ?? 0,
+        height: node.frameHeight ?? 0,
+      })
+    }
+  }
+
+  // Fetch frame images from Figma (always fetch fresh images on sync)
+  const frameIds = Array.from(uniqueFrames.keys())
+  const frameImages = frameIds.length > 0
+    ? await fetchFrameImages(project.figma_file_key, project.figma_token, frameIds)
+    : {}
+
+  // Store frame metadata and images
+  for (const [frameId, frameData] of uniqueFrames) {
+    upsertFrame({
+      id: frameId,
+      project_id: projectId,
+      name: frameData.name,
+      image_url: frameImages[frameId] ?? null,
+      x: frameData.x,
+      y: frameData.y,
+      width: frameData.width,
+      height: frameData.height,
+      last_synced: timestamp,
+    })
   }
 
   // Update last sync timestamp on project

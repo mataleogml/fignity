@@ -55,6 +55,20 @@ export interface TextBlock {
   created_at: number
 }
 
+// Frame metadata (for visual mode)
+export interface Frame {
+  id: string
+  project_id: string
+  name: string
+  image_url: string | null
+  x: number
+  y: number
+  width: number
+  height: number
+  last_synced: number
+  created_at: number
+}
+
 // Component metadata (for inclusion/exclusion UI)
 export interface ComponentInfo {
   id: string

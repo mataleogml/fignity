@@ -11,7 +11,8 @@ import {
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import type { Project, TextBlock, SyncResult } from '@/lib/types'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import type { Project, TextBlock, SyncResult, Frame } from '@/lib/types'
 
 export default function ProjectDetailPage() {
   const params = useParams()
@@ -20,15 +21,16 @@ export default function ProjectDetailPage() {
 
   const [project, setProject] = useState<Project | null>(null)
   const [textBlocks, setTextBlocks] = useState<TextBlock[]>([])
+  const [frames, setFrames] = useState<Frame[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<'page' | 'list'>('list')
 
   useEffect(() => {
     fetchProject()
     fetchTextBlocks()
+    fetchFrames()
   }, [projectId])
 
   const fetchProject = async () => {
@@ -58,6 +60,18 @@ export default function ProjectDetailPage() {
     }
   }
 
+  const fetchFrames = async () => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/frames`)
+      const data = await res.json()
+      if (data.success) {
+        setFrames(data.data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch frames:', err)
+    }
+  }
+
   const handleSync = async () => {
     setIsSyncing(true)
     setError(null)
@@ -75,6 +89,7 @@ export default function ProjectDetailPage() {
 
       setSyncResult(data.data)
       await fetchTextBlocks()
+      await fetchFrames()
       await fetchProject()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sync failed')
@@ -210,27 +225,16 @@ export default function ProjectDetailPage() {
           </Card>
         )}
 
-        {/* View Mode Tabs */}
-        <div className="flex gap-2">
-          <Button
-            variant={viewMode === 'page' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('page')}
-          >
-            Page View
-          </Button>
-          <Button
-            variant={viewMode === 'list' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('list')}
-          >
-            List View
-          </Button>
-        </div>
+        {/* Tabs for switching between text-only and visual modes */}
+        <Tabs defaultValue="text" className="w-full">
+          <TabsList>
+            <TabsTrigger value="text">Text Only</TabsTrigger>
+            <TabsTrigger value="visual">Visual</TabsTrigger>
+          </TabsList>
 
-        {/* List View - Collapsible grouped by frame (publication page) */}
-        {viewMode === 'list' &&
-          sortedFrames.map((frame, index) => (
+          {/* Text Only Mode - Collapsible grouped by frame (publication page) */}
+          <TabsContent value="text" className="space-y-4 mt-6">
+            {sortedFrames.map((frame, index) => (
             <details key={frame.frameId} className="group" open>
               <summary className="cursor-pointer list-none">
                 <Card className="hover:shadow-md transition-shadow">
@@ -271,19 +275,23 @@ export default function ProjectDetailPage() {
               </Card>
             </details>
           ))}
+          </TabsContent>
 
-        {/* Page View - Visual canvas showing each publication page */}
-        {viewMode === 'page' &&
-          sortedFrames.map((frame, index) => {
+          {/* Visual Mode - Frame images with text box overlays (no text content) */}
+          <TabsContent value="visual" className="space-y-6 mt-6">
+            {sortedFrames.map((frame, index) => {
+            // Find corresponding frame data with image
+            const frameData = frames.find(f => f.id === frame.frameId)
+
             // Use frame dimensions from first block (all blocks in same frame have same dimensions)
             const firstBlock = frame.blocks[0]
-            const pageWidth = firstBlock?.frame_width ?? 612
-            const pageHeight = firstBlock?.frame_height ?? 792
-            const frameX = firstBlock?.frame_x ?? 0
-            const frameY = firstBlock?.frame_y ?? 0
+            const pageWidth = frameData?.width ?? firstBlock?.frame_width ?? 612
+            const pageHeight = frameData?.height ?? firstBlock?.frame_height ?? 792
+            const frameX = frameData?.x ?? firstBlock?.frame_x ?? 0
+            const frameY = frameData?.y ?? firstBlock?.frame_y ?? 0
 
-            // Scale to fit display (target 600px wide)
-            const targetWidth = 600
+            // Scale to fit display (target 800px wide for better visibility)
+            const targetWidth = 800
             const scale = targetWidth / pageWidth
 
             return (
@@ -300,54 +308,60 @@ export default function ProjectDetailPage() {
                 <CardContent>
                   <div className="flex justify-center">
                     <div
-                      className="relative border rounded-lg bg-white shadow-md overflow-hidden"
+                      className="relative rounded-lg shadow-md overflow-hidden"
                       style={{
                         width: pageWidth * scale,
                         height: pageHeight * scale,
                       }}
                     >
+                      {/* Background frame image if available */}
+                      {frameData?.image_url ? (
+                        <img
+                          src={frameData.image_url}
+                          alt={frame.frameName}
+                          className="absolute inset-0 w-full h-full object-contain"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 bg-white border" />
+                      )}
+
+                      {/* Text box overlays - showing boxes without text content */}
                       {frame.blocks.map((block) => {
-                        const scaledFontSize = Math.max(6, block.font_size * scale)
                         return (
                           <div
                             key={block.id}
-                            className="absolute border border-blue-200 bg-blue-50/30 p-1 hover:z-10 hover:shadow-lg hover:border-blue-500 transition-all cursor-pointer group"
+                            className="absolute border-2 border-blue-400/70 bg-blue-100/20 hover:z-10 hover:border-blue-600 hover:bg-blue-200/40 transition-all cursor-pointer group"
                             style={{
                               left: (block.x - frameX) * scale,
                               top: (block.y - frameY) * scale,
                               width: block.width * scale,
-                              minHeight: block.height * scale,
+                              height: block.height * scale,
                             }}
-                            title={block.content}
+                            title={`${block.style}: ${block.content.substring(0, 50)}...`}
                           >
                             <Badge
                               variant="secondary"
-                              className="absolute top-0 left-0 text-[8px] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10"
+                              className="absolute top-0 left-0 text-[9px] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 bg-blue-600 text-white"
                             >
                               {block.style}
                             </Badge>
-                            <p
-                              className="leading-tight text-gray-700"
-                              style={{
-                                fontSize: scaledFontSize,
-                                lineHeight: `${scaledFontSize * 1.2}px`,
-                              }}
-                            >
-                              {block.content}
-                            </p>
                           </div>
                         )
                       })}
                     </div>
                   </div>
                   <p className="text-xs text-gray-500 mt-4 text-center">
-                    Hover over text blocks to see style · Actual page size:{' '}
-                    {pageWidth}×{pageHeight}px
+                    {frameData?.image_url
+                      ? 'Frame image with text block overlays - hover to see style'
+                      : 'No frame image available - showing text boxes only'
+                    }
                   </p>
                 </CardContent>
               </Card>
             )
           })}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )

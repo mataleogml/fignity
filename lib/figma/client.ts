@@ -54,6 +54,38 @@ export interface ExtractedTextNode {
   height: number
 }
 
+/**
+ * Fetch frame images from Figma
+ */
+export async function fetchFrameImages(
+  fileKey: string,
+  token: string,
+  frameIds: string[]
+): Promise<Record<string, string>> {
+  if (frameIds.length === 0) {
+    return {}
+  }
+
+  const url = `${FIGMA_API_BASE}/images/${fileKey}?ids=${frameIds.join(',')}&format=png&scale=1`
+
+  const response = await fetch(url, {
+    headers: {
+      'X-Figma-Token': token,
+    },
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new FigmaApiError(
+      `Figma Images API error: ${errorText}`,
+      response.status
+    )
+  }
+
+  const data = await response.json() as { images: Record<string, string> }
+  return data.images
+}
+
 export function extractTextNodes(
   file: FigmaFile,
   sourcePageIds?: string[]
